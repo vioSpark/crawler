@@ -7,15 +7,13 @@ import pickle
 import datetime as dt
 
 
-
-
 def crawl(link):
-    recursion_level=r_level
-    recursion_level+=1
+    recursion_level = r_level
+    recursion_level += 1
     print('crawling started at recursion level:\t' + str(recursion_level))
     for visit in visited:
-        if visit==link:
-            print('alredy visited:\t\t\t\t' + str(link))
+        if visit == link:
+            print('already visited:\t\t\t\t' + str(link))
             return
     print('not visited yet:\t\t\t\t' + str(link))
     browser.open(link)
@@ -37,36 +35,34 @@ def crawl(link):
             # file.write(page)
             # file.close()
         except HTTPError as e:
-            print("\tERROR:\t\t\t\t\t"+str(e))
+            print("\tERROR:\t\t\t\t\t" + str(e))
             continue
         except UnicodeDecodeError as e:
-            print("\tERROR:\t\t\t\t\t"+str(e))
+            print("\tERROR:\t\t\t\t\t" + str(e))
             continue
         except OSError as e:
-            print("\tERROR:\t\t\t\t\t"+str(e))
-    print('crawling stopped on recursion level:\t' +str(recursion_level))
-    recursion_level-=1
-
+            print("\tERROR:\t\t\t\t\t" + str(e))
+    print('crawling stopped on recursion level:\t' + str(recursion_level))
+    recursion_level -= 1
 
 
 try:
     # Create target Directory
     os.mkdir("data")
 except FileExistsError:
-    print("Directory data alredy exists")
+    print("Directory data already exists")
 
 # Connect to link
-base_url="http://bassment.ktk.bme.hu/"
+base_url = "http://bassment.ktk.bme.hu/"
 browser = mechanicalsoup.StatefulBrowser()
 
-
-r_level=0
-visited=[]
+r_level = 0
+visited = []
 try:
     crawl(base_url)
 except all:
     pass
 print(visited)
-file=open("data/visited: "+str(dt.datetime.now().strftime("%c")), 'ab')
+file = open("data/visited: " + str(dt.datetime.now().strftime("%c")), 'ab')
 pickle.dump(visited, file)
 file.close()
