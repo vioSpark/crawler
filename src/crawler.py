@@ -5,7 +5,9 @@ import os
 import re
 import pickle
 import datetime as dt
-import networkx as nx
+
+
+# import networkx as nx
 
 
 class Crawler:
@@ -13,7 +15,6 @@ class Crawler:
     recursion_level = None
     visited = []
     browser = mechanicalsoup.StatefulBrowser()
-
 
     def config(self, base_url, recursion_level):
         self.base_url = base_url
@@ -45,7 +46,7 @@ class Crawler:
                 page = urlopen(self.base_url + link.attrs['href']).read().decode('utf-8')
                 # print("data/"+re.sub('[\r\n?]*','',str(link.text)) +".htm")
                 print('\tomitting download, only testing')
-                self.crawl(self.base_url + link.attrs['href'])
+                self.crawl(self.base_url + link.attrs['href'], visited)
                 # file=open("data/"+re.sub('[\r\n?*]','',str(link.text)) +".htm", "w")
                 # file.write(page)
                 # file.close()
@@ -76,4 +77,5 @@ class Crawler:
         file.close()
 
     def visualize(self):
-        g = nx.Graph()
+        pass
+        # g = nx.Graph()
