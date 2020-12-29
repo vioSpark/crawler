@@ -18,11 +18,13 @@ class Crawler:
     base_url = None
     # visited = []
     browser = mechanicalsoup.StatefulBrowser()
-    quantity_limit = 500
-    recursion_limit = 1
+    quantity_limit = None
+    recursion_limit = None
 
-    def config(self, base_url):
+    def config(self, base_url, quantity_limit, depth_limit):
         self.base_url = base_url
+        self.quantity_limit = quantity_limit
+        self.recursion_limit = depth_limit
 
     def crawl(self, url, origin, recursion_level):
         def set_log_indent(recursion_level_tmp):
@@ -33,33 +35,29 @@ class Crawler:
 
         def skip(url_tmp, tabs):
             if url_tmp.startswith('#'):
-                log.debug(tabs + 'reference to the same page, omitting:\t' + url_tmp)
+                log.debug(tabs + 'reference to the same page, skipping:\t' + url_tmp)
+                return True
+            if url_tmp[:2] == '//' or not (new_url.startswith(self.base_url) or new_url.startswith('/')):
+                log.debug(tabs + 'outside of the boundaries, skipping:\thttps:' + url_tmp)
+                return True
+            if url_tmp.find('.org/w/') != -1:
+                log.debug(tabs + 'not ordinary link, skipping:\thttps:' + url_tmp)
+                return True
+            if recursion_level >= self.recursion_limit:
+                log.debug(tabs + 'depth limit reached, skipping:\t' + url_tmp)
                 return True
             return False
 
-        def inner_return_check(number_of_visited_links_tmp, tabs):
+        def return_check(number_of_visited_links_tmp, tabs):
             if number_of_visited_links_tmp > self.quantity_limit:
                 log.debug(tabs + 'quantity limit reached, returning')
                 return True
 
-        def return_check(url_tmp, tabs):
-            if url_tmp[:2] == '//':
-                log.debug(tabs + 'outside of the boundaries, omitting:\thttps:' + url_tmp)
-                return True
-            if recursion_level > self.recursion_limit:
-                log.debug(tabs + 'depth limit reached, returning:\t' + url_tmp)
-                return True
-            return False
-
-        number_of_visited_links = 0
-        self.graph.add_edge(origin, url)
-        self.download_page(url)
-
         tmp = set_log_indent(recursion_level)
 
-        if return_check(url, tmp):
-            return
-
+        self.graph.add_edge(origin, url)
+        self.download_page(url)
+        number_of_visited_links = 0
         recursion_level += 1
 
         log.debug(tmp + 'crawling started at recursion level:\t' + str(recursion_level))
@@ -71,29 +69,32 @@ class Crawler:
 
             if skip(new_url, tmp):
                 continue
-            if inner_return_check(number_of_visited_links, tmp):
+            if return_check(number_of_visited_links, tmp):
                 return
 
-            if new_url.startswith(self.base_url) or new_url.startswith('/'):
-                number_of_visited_links += 1
-                if new_url.startswith('/'):
-                    # finding the third '/', trimming the last character down than appending the new_url
-                    new_url = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + new_url
+            number_of_visited_links += 1
+            # creating full link
+            if new_url.startswith('/'):
+                # finding the third '/', trimming the last character down than appending the new_url
+                new_url = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + new_url
 
-                if new_url in self.graph.nodes:
-                    number_of_visited_links -= 1
-                    self.graph.add_edge(url, new_url)
-                    log.debug(tmp + 'already visited, omitting:\t' + new_url)
-                    continue
-                try:
-                    self.crawl(new_url, url, recursion_level)
-                except HTTPError or UnicodeDecodeError or OSError as e:
-                    print(tmp + "ERROR:\t" + str(e))
-            else:
-                log.debug(tmp + 'outside of the boundaries, omitting:\t' + new_url)
+            # removing '#' part
+            loc = new_url.find('#')
+            if loc!=-1:
+                new_url = new_url[:loc]
+
+            if new_url in self.graph.nodes:
+                number_of_visited_links -= 1
+                self.graph.add_edge(url, new_url)
+                log.debug(tmp + 'already visited, omitting:\t' + new_url)
                 continue
+            try:
+                self.crawl(new_url, url, recursion_level)
+            except HTTPError or UnicodeDecodeError or OSError as e:
+                print(tmp + "ERROR:\t" + str(e))
+
         log.debug(tmp + 'crawling stopped on recursion level:\t' + str(recursion_level))
-        log.debug(tmp + 'ending site:\t' + url)
+        log.debug(tmp + 'ended parsing site:\t' + url)
         recursion_level -= 1
 
     def run(self):
@@ -139,8 +140,9 @@ class Crawler:
         # pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
         log.debug('generating spring layout')
         pos = nx.spring_layout(self.graph, iterations=10)
-        # nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
-        nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
+        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        log.debug('drawing nodes')
+        # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
 
         plt.axis("equal")
         plt.show()
