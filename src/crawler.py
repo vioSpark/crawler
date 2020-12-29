@@ -33,18 +33,23 @@ class Crawler:
                 tabs += '\t'
             return tabs
 
-        def skip(url_tmp, tabs):
+        def skip(url_tmp, origin_tmp, tabs):
             if url_tmp.startswith('#'):
                 log.debug(tabs + 'reference to the same page, skipping:\t' + url_tmp)
                 return True
             if url_tmp[:2] == '//' or not (new_url.startswith(self.base_url) or new_url.startswith('/')):
                 log.debug(tabs + 'outside of the boundaries, skipping:\thttps:' + url_tmp)
                 return True
-            if url_tmp.find('.org/w/') != -1:
+            if url_tmp.find('/w/') != -1:
                 log.debug(tabs + 'not ordinary link, skipping:\thttps:' + url_tmp)
                 return True
             if recursion_level >= self.recursion_limit:
+                self.graph.add_edge(origin_tmp, url_tmp)
                 log.debug(tabs + 'depth limit reached, skipping:\t' + url_tmp)
+                return True
+            if new_url in self.graph.nodes:
+                self.graph.add_edge(url, new_url)
+                log.debug(tmp + 'already visited, omitting:\t' + new_url)
                 return True
             return False
 
@@ -52,6 +57,17 @@ class Crawler:
             if number_of_visited_links_tmp > self.quantity_limit:
                 log.debug(tabs + 'quantity limit reached, returning')
                 return True
+
+        def fix_url(url_tmp):
+            # creating full link
+            if url_tmp.startswith('/'):
+                # finding the third '/', trimming the last character down than appending the new_url
+                url_tmp = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + url_tmp
+            # removing '#' part
+            loc = url_tmp.find('#')
+            if loc != -1:
+                url_tmp = url_tmp[:loc]
+            return url_tmp
 
         tmp = set_log_indent(recursion_level)
 
@@ -65,29 +81,14 @@ class Crawler:
         log.debug(tmp + 'link opened:\t' + url)
 
         for link in self.browser.links():
-            new_url = link.attrs['href']
+            new_url = fix_url(link.attrs['href'])
 
-            if skip(new_url, tmp):
+            if skip(new_url, url, tmp):
                 continue
             if return_check(number_of_visited_links, tmp):
                 return
-
             number_of_visited_links += 1
-            # creating full link
-            if new_url.startswith('/'):
-                # finding the third '/', trimming the last character down than appending the new_url
-                new_url = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + new_url
 
-            # removing '#' part
-            loc = new_url.find('#')
-            if loc!=-1:
-                new_url = new_url[:loc]
-
-            if new_url in self.graph.nodes:
-                number_of_visited_links -= 1
-                self.graph.add_edge(url, new_url)
-                log.debug(tmp + 'already visited, omitting:\t' + new_url)
-                continue
             try:
                 self.crawl(new_url, url, recursion_level)
             except HTTPError or UnicodeDecodeError or OSError as e:
