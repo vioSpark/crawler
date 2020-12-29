@@ -11,7 +11,6 @@ def test():
     #
     # Create an empty graph with no nodes and no edges.
 
-    import networkx as nx
     G = nx.Graph()
 
     # By definition, a `Graph` is a collection of nodes (vertices) along with
