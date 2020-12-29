@@ -20,9 +20,11 @@ class Crawler:
     browser = mechanicalsoup.StatefulBrowser()
     quantity_limit = None
     recursion_limit = None
+    start_url = None
 
-    def config(self, base_url, quantity_limit, depth_limit):
-        self.base_url = base_url
+    def config(self, start_url, quantity_limit, depth_limit):
+        self.start_url = start_url
+        self.base_url = re.findall('(^(?:.*?/){3})', start_url)[0]
         self.quantity_limit = quantity_limit
         self.recursion_limit = depth_limit
 
@@ -34,14 +36,17 @@ class Crawler:
             return tabs
 
         def skip(url_tmp, origin_tmp, tabs):
-            if url_tmp.startswith('#'):
-                log.debug(tabs + 'reference to the same page, skipping:\t' + url_tmp)
+            if new_url == '':
                 return True
-            if url_tmp[:2] == '//' or not (new_url.startswith(self.base_url) or new_url.startswith('/')):
+            if not new_url.startswith(self.base_url):
                 log.debug(tabs + 'outside of the boundaries, skipping:\thttps:' + url_tmp)
                 return True
             if url_tmp.find('/w/') != -1:
                 log.debug(tabs + 'not ordinary link, skipping:\thttps:' + url_tmp)
+                return True
+            if url_tmp.startswith('https://en.wikipedia.org/wiki/Special:') or \
+                    url_tmp.startswith('https://en.wikipedia.org/wiki/Category:'):
+                log.debug(tabs + 'Special resource, skipping:\thttps:' + url_tmp)
                 return True
             if recursion_level >= self.recursion_limit:
                 self.graph.add_edge(origin_tmp, url_tmp)
@@ -59,10 +64,12 @@ class Crawler:
                 return True
 
         def fix_url(url_tmp):
+            if url_tmp.startswith('//'):
+                return 'https:' + url_tmp
             # creating full link
             if url_tmp.startswith('/'):
                 # finding the third '/', trimming the last character down than appending the new_url
-                url_tmp = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + url_tmp
+                url_tmp = self.base_url[:-1] + url_tmp
             # removing '#' part
             loc = url_tmp.find('#')
             if loc != -1:
@@ -80,8 +87,11 @@ class Crawler:
         self.browser.open(url)
         log.debug(tmp + 'link opened:\t' + url)
 
-        for link in self.browser.links():
-            new_url = fix_url(link.attrs['href'])
+        for link in self.browser.get_current_page().find(id='bodyContent').find_all('a'):
+            try:
+                new_url = fix_url(link.attrs['href'])
+            except KeyError as e:
+                log.debug(tmp+str(e))
 
             if skip(new_url, url, tmp):
                 continue
@@ -105,7 +115,7 @@ class Crawler:
             pass
 
         try:
-            self.crawl(self.base_url, 'START', 0)
+            self.crawl(self.start_url, 'START', 0)
             self.graph.remove_node('START')
         except ... as e:
             print("general error occurred: " + str(e))
@@ -141,9 +151,9 @@ class Crawler:
         # pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
         log.debug('generating spring layout')
         pos = nx.spring_layout(self.graph, iterations=10)
-        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        # nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
         log.debug('drawing nodes')
-        # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
+        nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
 
         plt.axis("equal")
         plt.show()
