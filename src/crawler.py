@@ -1,16 +1,13 @@
 import mechanicalsoup
-from urllib.request import urlopen
 from urllib.error import HTTPError
 import os
 import re
-import pickle
-import datetime as dt
 import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import sys
-
-# import networkx as nx
+from networkx.drawing.nx_agraph import graphviz_layout
+from networkx.drawing.nx_pydot import write_dot
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -21,31 +18,38 @@ log.addHandler(handler)
 class Crawler:
     graph = nx.DiGraph()
     base_url = None
-    recursion_level = None
     # visited = []
     browser = mechanicalsoup.StatefulBrowser()
-    quantity_limit = 5
+    quantity_limit = 10
+    recursion_limit = 1
 
-    def config(self, base_url, recursion_level):
+    def config(self, base_url):
         self.base_url = base_url
-        self.recursion_level = recursion_level
 
-    def crawl(self, url, origin):
-        def set_log_indent(self):
-            tmp = ''
-            for i in range(self.recursion_level):
-                tmp += '\t'
-            return tmp
+    def crawl(self, url, origin, recursion_level):
+        def set_log_indent(recursion_level_tmp):
+            tabs = ''
+            for i in range(recursion_level_tmp):
+                tabs += '\t'
+            return tabs
 
-        def error_check(self, new_url, number_of_visited_links, tmp):
-            if number_of_visited_links > self.quantity_limit:
-                log.debug(tmp + 'quantity limit reached, returning')
+        def skip(url_tmp, tabs):
+            if url_tmp.startswith('#'):
+                log.debug(tabs + 'reference to the same page, omitting:\t' + url_tmp)
                 return True
-            if new_url.startswith('#'):
-                log.debug(tmp + 'reference to the same page, omitting:\t' + new_url)
+            return False
+
+        def inner_return_check(number_of_visited_links_tmp, tabs):
+            if number_of_visited_links_tmp > self.quantity_limit:
+                log.debug(tabs + 'quantity limit reached, returning')
                 return True
-            if new_url[:2] == '//':
-                log.debug(tmp + 'outside of the boundaries, omitting:\thttps:' + new_url)
+
+        def return_check(url_tmp, tabs):
+            if url_tmp[:2] == '//':
+                log.debug(tabs + 'outside of the boundaries, omitting:\thttps:' + url_tmp)
+                return True
+            if recursion_level > self.recursion_limit:
+                log.debug(tabs + 'depth limit reached, returning:\t' + url_tmp)
                 return True
             return False
 
@@ -53,42 +57,46 @@ class Crawler:
         self.graph.add_edge(origin, url)
         self.download_page(url)
 
-        tmp = set_log_indent(self)
+        tmp = set_log_indent(recursion_level)
 
-        if self.recursion_level > 1:
-            log.debug(tmp + 'depth limit reached, returning')
-            # self.recursion_level -= 1
+        if return_check(url, tmp):
             return
 
-        self.recursion_level += 1
+        recursion_level += 1
 
-        log.debug(tmp + 'crawling started at recursion level:\t' + str(self.recursion_level))
+        log.debug(tmp + 'crawling started at recursion level:\t' + str(recursion_level))
         self.browser.open(url)
         log.debug(tmp + 'link opened:\t' + url)
 
         for link in self.browser.links():
-            number_of_visited_links += 1
             new_url = link.attrs['href']
 
-            error = error_check(self, new_url, number_of_visited_links, tmp)
-            if error:
+            if skip(new_url, tmp):
                 continue
+            if inner_return_check(number_of_visited_links, tmp):
+                return
+
             if new_url.startswith(self.base_url) or new_url.startswith('/'):
+                number_of_visited_links += 1
                 if new_url.startswith('/'):
-                    # trimming the last character down, than appending the new_url
-                    new_url = re.findall('(^(?:.*?\/){3})', self.base_url)[0][:-1] + new_url
-                    if new_url in self.graph.nodes:
-                        log.debug(tmp + 'already visited, omitting:\t' + new_url)
-                        continue
+                    # finding the third '/', trimming the last character down than appending the new_url
+                    new_url = re.findall('(^(?:.*?/){3})', self.base_url)[0][:-1] + new_url
+
+                if new_url in self.graph.nodes:
+                    number_of_visited_links -= 1
+                    self.graph.add_edge(url, new_url)
+                    log.debug(tmp + 'already visited, omitting:\t' + new_url)
+                    continue
                 try:
-                    self.crawl(new_url, self.browser.get_url())
+                    self.crawl(new_url, url, recursion_level)
                 except HTTPError or UnicodeDecodeError or OSError as e:
-                    print(tmp + "ERROR:\t\t\t\t\t" + str(e))
+                    print(tmp + "ERROR:\t" + str(e))
             else:
                 log.debug(tmp + 'outside of the boundaries, omitting:\t' + new_url)
                 continue
-        log.debug(tmp + 'crawling stopped on recursion level:\t' + str(self.recursion_level))
-        self.recursion_level -= 1
+        log.debug(tmp + 'crawling stopped on recursion level:\t' + str(recursion_level))
+        log.debug(tmp + 'ending site:\t' + url)
+        recursion_level -= 1
 
     def run(self):
         try:
@@ -97,17 +105,20 @@ class Crawler:
             pass
 
         try:
-            self.crawl(self.base_url, 'START')
+            self.crawl(self.base_url, 'START', 0)
+            self.graph.remove_node('START')
         except ... as e:
             print("general error occurred: " + str(e))
         print(list(self.graph.nodes()))
-        self.save()
+        self.save_graph()
 
-    def save(self):
-        pass
-        # file = open("../data/visited", 'ab')
-        # pickle.dump(list(self.graph.nodes()), file)
-        # file.close()
+    def save_graph(self, p=r'../data/last_run.dot'):
+        log.debug('saving results to: ' + p)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        write_dot(self.graph, p)
+
+    def load_graph(self, p=r'../data/last_run.dot'):
+        log.debug('loading save-file from: ' + p)
 
     @staticmethod
     def download_page(url):
@@ -121,8 +132,13 @@ class Crawler:
         # file.close()
 
     def visualize(self):
-        plt.figure(111, figsize=(12, 12))
-        pos = nx.spring_layout(self.graph, k=30, iterations=1000)
-        nx.draw(self.graph, pos=pos, with_labels=True, node_size=60, font_size=20)
-        # nx.draw(self.graph, with_labels=True, font_weight='bold')
+        # pos = graphviz_layout(self.graph, prog="twopi", args="")
+        plt.figure(figsize=(8, 8))
+        log.debug('generating kamada_kawai_layout')
+        pos = nx.kamada_kawai_layout(self.graph)
+        log.debug('generating spring layout')
+        pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
+        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.5, node_color="blue")
+        plt.axis("equal")
         plt.show()
