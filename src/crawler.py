@@ -6,8 +6,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import sys
-from networkx.drawing.nx_agraph import graphviz_layout
-from networkx.drawing.nx_pydot import write_dot
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -20,7 +18,7 @@ class Crawler:
     base_url = None
     # visited = []
     browser = mechanicalsoup.StatefulBrowser()
-    quantity_limit = 10
+    quantity_limit = 500
     recursion_limit = 1
 
     def config(self, base_url):
@@ -112,13 +110,14 @@ class Crawler:
         print(list(self.graph.nodes()))
         self.save_graph()
 
-    def save_graph(self, p=r'../data/last_run.dot'):
+    def save_graph(self, p=r'../data/last_run'):
         log.debug('saving results to: ' + p)
         os.makedirs(os.path.dirname(p), exist_ok=True)
-        write_dot(self.graph, p)
+        nx.write_gml(self.graph, p)
 
-    def load_graph(self, p=r'../data/last_run.dot'):
+    def load_graph(self, p=r'../data/last_run'):
         log.debug('loading save-file from: ' + p)
+        self.graph = nx.read_gml(p)
 
     @staticmethod
     def download_page(url):
@@ -134,11 +133,14 @@ class Crawler:
     def visualize(self):
         # pos = graphviz_layout(self.graph, prog="twopi", args="")
         plt.figure(figsize=(8, 8))
-        log.debug('generating kamada_kawai_layout')
-        pos = nx.kamada_kawai_layout(self.graph)
+        # log.debug('generating kamada_kawai_layout')
+        # pos = nx.kamada_kawai_layout(self.graph)
+        # log.debug('generating spring layout')
+        # pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
         log.debug('generating spring layout')
-        pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
-        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
-        # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.5, node_color="blue")
+        pos = nx.spring_layout(self.graph, iterations=10)
+        # nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
+
         plt.axis("equal")
         plt.show()
