@@ -10,13 +10,13 @@ log.addHandler(handler)
 cr = crawler.Crawler()
 download = True
 
-# todo: progress bar
+# todo: determine if it's buggy or not
 # todo: save sub-graphs
 
 if download:
     cr.config(start_url="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)",
               quantity_limit=100000,
-              depth_limit=3)
+              depth_limit=4)
     log.info('Starting crawler with: ' + cr.base_url)
     cr.run()
 else:

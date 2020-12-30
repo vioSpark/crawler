@@ -103,18 +103,21 @@ class Crawler:
         div_links = self.browser.get_current_page().find(id='bodyContent').find_all('a')
         for link in div_links:
             progress += 1
+            print_progress(progress, len(div_links), tmp)
+            # link sometimes doesn't has attribute href if self link
             try:
                 new_url = fix_url(link.attrs['href'])
-                if skip(new_url, url, tmp):
-                    continue
-                if return_check(number_of_visited_links, tmp):
-                    return
-                number_of_visited_links += 1
-                print_progress(progress, len(div_links), tmp)
-                self.crawl(new_url, url, recursion_level)
+            except KeyError:
+                log.debug('KeyError link skipped')
+                continue
 
-            except KeyError as e:
-                log.debug(tmp + str(e))
+            if skip(new_url, url, tmp):
+                continue
+            if return_check(number_of_visited_links, tmp):
+                return
+            number_of_visited_links += 1
+            try:
+                self.crawl(new_url, url, recursion_level)
             except HTTPError or UnicodeDecodeError or OSError as e:
                 log.info(tmp + "ERROR:\t" + str(e))
 
@@ -128,11 +131,8 @@ class Crawler:
         except FileExistsError:
             pass
 
-        try:
-            self.crawl(self.start_url, 'START', 0)
-            self.graph.remove_node('START')
-        except ... as e:
-            print("general error occurred: " + str(e))
+        self.crawl(self.start_url, 'START', 0)
+        self.graph.remove_node('START')
         self.save_graph()
 
     def save_graph(self, p=r'../data/last_run'):
@@ -163,16 +163,18 @@ class Crawler:
                     self.graph.remove_node(node)
 
         # pos = graphviz_layout(self.graph, prog="twopi", args="")
-        plt.figure(figsize=(8, 8))
+        plt.figure(figsize=(50, 50))
         # log.debug('generating kamada_kawai_layout')
         # pos = nx.kamada_kawai_layout(self.graph)
         # log.debug('generating spring layout')
         # pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
+        log.debug('trimming graph')
         trim_unimportant(3)
         log.debug('generating spring layout')
         pos = nx.spring_layout(self.graph, iterations=10)
         log.debug('drawing graph')
-        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        nx.draw_networkx_nodes(self.graph, pos, node_size=50, alpha=0.5, node_color="red")
+        nx.draw_networkx_edges(self.graph, pos, node_size=50, alpha=0.1, label=False)
         # log.debug('drawing nodes')
         # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
 
