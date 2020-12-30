@@ -6,9 +6,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 import sys
+import math
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 log.addHandler(handler)
 
@@ -27,6 +28,10 @@ class Crawler:
         self.base_url = re.findall('(^(?:.*?/){3})', start_url)[0]
         self.quantity_limit = quantity_limit
         self.recursion_limit = depth_limit
+
+    def crawl_chunk(self):
+        pass
+        # todo: same as crawl but progess bar and saves ... also might be needed in recursion level -3 from the bottom
 
     def crawl(self, url, origin, recursion_level):
         def set_log_indent(recursion_level_tmp):
@@ -76,6 +81,13 @@ class Crawler:
                 url_tmp = url_tmp[:loc]
             return url_tmp
 
+        def print_progress(current, length, tabs):
+            percentage = round(current * 100 / length, 1)
+            if recursion_level == 1:
+                log.info(tabs + str(percentage) + '%')
+            else:
+                log.debug(tabs + str(percentage) + '%')
+
         tmp = set_log_indent(recursion_level)
 
         self.graph.add_edge(origin, url)
@@ -87,22 +99,24 @@ class Crawler:
         self.browser.open(url)
         log.debug(tmp + 'link opened:\t' + url)
 
-        for link in self.browser.get_current_page().find(id='bodyContent').find_all('a'):
+        progress = 0
+        div_links = self.browser.get_current_page().find(id='bodyContent').find_all('a')
+        for link in div_links:
+            progress += 1
             try:
                 new_url = fix_url(link.attrs['href'])
-            except KeyError as e:
-                log.debug(tmp+str(e))
-
-            if skip(new_url, url, tmp):
-                continue
-            if return_check(number_of_visited_links, tmp):
-                return
-            number_of_visited_links += 1
-
-            try:
+                if skip(new_url, url, tmp):
+                    continue
+                if return_check(number_of_visited_links, tmp):
+                    return
+                number_of_visited_links += 1
+                print_progress(progress, len(div_links), tmp)
                 self.crawl(new_url, url, recursion_level)
+
+            except KeyError as e:
+                log.debug(tmp + str(e))
             except HTTPError or UnicodeDecodeError or OSError as e:
-                print(tmp + "ERROR:\t" + str(e))
+                log.info(tmp + "ERROR:\t" + str(e))
 
         log.debug(tmp + 'crawling stopped on recursion level:\t' + str(recursion_level))
         log.debug(tmp + 'ended parsing site:\t' + url)
@@ -119,7 +133,6 @@ class Crawler:
             self.graph.remove_node('START')
         except ... as e:
             print("general error occurred: " + str(e))
-        print(list(self.graph.nodes()))
         self.save_graph()
 
     def save_graph(self, p=r'../data/last_run'):
@@ -143,17 +156,25 @@ class Crawler:
         # file.close()
 
     def visualize(self):
+        def trim_unimportant(threshold):
+            tmp = nx.DiGraph(self.graph)
+            for node in tmp:
+                if len(self.graph.adj[node]) < threshold:
+                    self.graph.remove_node(node)
+
         # pos = graphviz_layout(self.graph, prog="twopi", args="")
         plt.figure(figsize=(8, 8))
         # log.debug('generating kamada_kawai_layout')
         # pos = nx.kamada_kawai_layout(self.graph)
         # log.debug('generating spring layout')
         # pos = nx.spring_layout(self.graph, pos=pos, iterations=30)
+        trim_unimportant(3)
         log.debug('generating spring layout')
         pos = nx.spring_layout(self.graph, iterations=10)
-        # nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
-        log.debug('drawing nodes')
-        nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
+        log.debug('drawing graph')
+        nx.draw(self.graph, pos, node_size=20, alpha=0.1, node_color="blue", with_labels=False)
+        # log.debug('drawing nodes')
+        # nx.draw_networkx_nodes(self.graph, pos, node_size=20, alpha=0.1, node_color="blue")
 
         plt.axis("equal")
         plt.show()

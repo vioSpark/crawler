@@ -12,12 +12,11 @@ download = True
 
 # todo: progress bar
 # todo: save sub-graphs
-# todo: bottleneck analysis
 
 if download:
     cr.config(start_url="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)",
               quantity_limit=100000,
-              depth_limit=2)
+              depth_limit=3)
     log.info('Starting crawler with: ' + cr.base_url)
     cr.run()
 else:
